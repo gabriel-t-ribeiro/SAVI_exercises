@@ -4,6 +4,7 @@ import open3d as o3d
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+import json
 
 viewpoint = {
 	"class_name" : "ViewTrajectory",
@@ -41,6 +42,17 @@ def main():
                                           window_name=str(name)
                                           )
 
+    # Load ground-truth matrix (relative to script folder or working dir)
+    with open("icp_point_clouds/T_true.json", "r") as f:
+        T_true = np.array(json.load(f)["T_part_1_part_2"], dtype=np.float64)
+
+    def compute_registration_error(T_est: np.ndarray, T_true: np.ndarray) -> tuple[float, float]:
+        E = np.linalg.inv(T_true) @ T_est
+        trans_err_mm = float(np.linalg.norm(E[:3, 3]) * 1000.0)
+        cos_theta = np.clip((np.trace(E[:3, :3]) - 1.0) / 2.0, -1.0, 1.0)
+        rot_err_deg = float(np.degrees(np.arccos(cos_theta)))
+        return trans_err_mm, rot_err_deg
+
     # definind the redings of the point clouds ------------______________________
     demo_icp_pcds = o3d.data.DemoICPPointClouds()
 
@@ -48,15 +60,31 @@ def main():
     # source = o3d.io.read_point_cloud(demo_icp_pcds.paths[0])
     # target = o3d.io.read_point_cloud(demo_icp_pcds.paths[1])
 
+    source = o3d.io.read_point_cloud('icp_point_clouds/part_2.ply')
+    target = o3d.io.read_point_cloud('icp_point_clouds/part_1.ply')
 
+    # using symmetric ICP
+    for pcd in (source, target):
+        pcd.estimate_normals(
+            search_param = o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
+            )
+        pcd.orient_normals_consistent_tangent_plane(30)
 
     print(source.has_normals())
     print(target.has_normals())  # True if the file contained normals
 
-    threshold = 0.02
-    trans_init = np.asarray([[0.862, 0.011, -0.507, 0.5],
-                             [-0.139, 0.967, -0.215, 0.7],
-                             [0.487, 0.255, 0.835, -1.4], [0.0, 0.0, 0.0, 1.0]])
+    threshold = 0.2
+    # trans_init = np.asarray([[0.862, 0.011, -0.507, 0.5],
+    #                          [-0.139, 0.967, -0.215, 0.7],
+    #                          [0.487, 0.255, 0.835, -1.4], [0.0, 0.0, 0.0, 1.0]])
+
+
+    rx, ry, rz = 0.0, 0.0, 0.0
+    tx, ty, tz = 0.0, 0.0, 0.0
+    trans_init = np.eye(4)
+    trans_init[:3, :3] = source.get_rotation_matrix_from_xyz((rx, ry, rz))  # radians
+    trans_init[:3, 3] = [tx, ty, tz]  # meters
+
     draw_registration_result(source, target, trans_init, name='Initial alignment')
 
     # measuring alignment for the 2 point clouds
@@ -64,24 +92,6 @@ def main():
     evaluation = o3d.pipelines.registration.evaluate_registration(
         source, target, threshold, trans_init)
     print(evaluation)
-
-    # print("Apply point-to-point ICP")
-    # reg_p2p = o3d.pipelines.registration.registration_icp(
-    #     source, target, threshold, trans_init,
-    #     o3d.pipelines.registration.TransformationEstimationPointToPoint())
-    # print(reg_p2p)
-    # print("Transformation is:")
-    # print(reg_p2p.transformation)
-    # draw_registration_result(source, target, reg_p2p.transformation)
-    #
-    # reg_p2p = o3d.pipelines.registration.registration_icp(
-    #     source, target, threshold, trans_init,
-    #     o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-    #     o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000))
-    # print(reg_p2p)
-    # print("Transformation is:")
-    # print(reg_p2p.transformation)
-    # draw_registration_result(source, target, reg_p2p.transformation)
 
     reg_p2p = o3d.pipelines.registration.registration_icp(
         source, target, threshold, trans_init,
@@ -95,19 +105,13 @@ def main():
     print("Apply point-to-plane ICP")
     reg_p2l = o3d.pipelines.registration.registration_icp(
         source, target, threshold, trans_init,
-        o3d.pipelines.registration.TransformationEstimationPointToPlane())
+        o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000))
     print(reg_p2l)
     print("Transformation is:")
     print(reg_p2l.transformation)
     draw_registration_result(source, target, reg_p2l.transformation, name='Point-to-plane icp')
 
-
-    # using symmetric ICP
-    for pcd in (source, target):
-        pcd.estimate_normals(
-            search_param = o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
-            )
-        pcd.orient_normals_consistent_tangent_plane(30)
 
     reg_sym = o3d.pipelines.registration.registration_symmetric_icp(
         source, target, threshold, trans_init,
@@ -126,7 +130,10 @@ def main():
         ("Symmetric ICP", reg_sym),
     ]
     for label, res in results:
-        print(f"{label:<20} | fitness: {res.fitness:.6f} | inlier_rmse: {res.inlier_rmse:.6f}")
+        t_err, r_err = compute_registration_error(res.transformation, T_true)
+        print(f"{label:<20} | fitness: {res.fitness:.6f} | inlier_rmse: {res.inlier_rmse:.6f} | {t_err:.2f} mm |"
+              f" {r_err:.2f} deg")
+
 
 if __name__ == '__main__':
     main()
