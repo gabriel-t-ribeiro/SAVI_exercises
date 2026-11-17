@@ -43,6 +43,9 @@ def main():
 
     # definind the redings of the point clouds ------------______________________
     demo_icp_pcds = o3d.data.DemoICPPointClouds()
+
+    print(demo_icp_pcds.has_normals())  # True if the file contained normals
+
     source = o3d.io.read_point_cloud(demo_icp_pcds.paths[0])
     target = o3d.io.read_point_cloud(demo_icp_pcds.paths[1])
     threshold = 0.02
