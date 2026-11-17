@@ -44,15 +44,18 @@ def main():
     # definind the redings of the point clouds ------------______________________
     demo_icp_pcds = o3d.data.DemoICPPointClouds()
 
-    print(demo_icp_pcds.has_normals())  # True if the file contained normals
 
     source = o3d.io.read_point_cloud(demo_icp_pcds.paths[0])
     target = o3d.io.read_point_cloud(demo_icp_pcds.paths[1])
+
+    print(source.has_normals())
+    print(target.has_normals())  # True if the file contained normals
+
     threshold = 0.02
     trans_init = np.asarray([[0.862, 0.011, -0.507, 0.5],
                              [-0.139, 0.967, -0.215, 0.7],
                              [0.487, 0.255, 0.835, -1.4], [0.0, 0.0, 0.0, 1.0]])
-    draw_registration_result(source, target, trans_init)
+    draw_registration_result(source, target, trans_init, name='Initial alignment')
 
     # measuring alignment for the 2 point clouds
     print("Initial alignment")
@@ -85,7 +88,16 @@ def main():
     print(reg_p2p)
     print("Transformation is:")
     print(reg_p2p.transformation)
-    draw_registration_result(source, target, reg_p2p.transformation)
+    draw_registration_result(source, target, reg_p2p.transformation, name='Point-to-Point ICP')
+
+    print("Apply point-to-plane ICP")
+    reg_p2l = o3d.pipelines.registration.registration_icp(
+        source, target, threshold, trans_init,
+        o3d.pipelines.registration.TransformationEstimationPointToPlane())
+    print(reg_p2l)
+    print("Transformation is:")
+    print(reg_p2l.transformation)
+    draw_registration_result(source, target, reg_p2l.transformation, name='Point-to-plane icp')
 
 
     # using symmetric ICP
@@ -102,7 +114,17 @@ def main():
 
     print(reg_sym)
 
-    draw_registration_result(source, target, reg_sym.transformation, name='symetric icp')
+    draw_registration_result(source, target, reg_sym.transformation, name='Symmetric ICP')
+
+    print("\n=== Fitness Comparison ===")
+    results = [
+        ("Initial alignment", evaluation),
+        ("Point-to-Point ICP", reg_p2p),
+        ("Point-to-Plane ICP", reg_p2l),
+        ("Symmetric ICP", reg_sym),
+    ]
+    for label, res in results:
+        print(f"{label:<20} | fitness: {res.fitness:.6f} | inlier_rmse: {res.inlier_rmse:.6f}")
 
 if __name__ == '__main__':
     main()
