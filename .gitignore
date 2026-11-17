@@ -219,3 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .DS_Store
+
+# Open3D visualizer snapshots
+RenderOption_*.json
+ScreenCamera_*.json

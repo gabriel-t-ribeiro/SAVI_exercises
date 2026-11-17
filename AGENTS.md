@@ -32,3 +32,6 @@ This repository is an environment for the SAVI course / computer vision projects
 3. **Direct Mechanical Diagnostics:**
    - When debugging or addressing issues, point out exact mechanical failures (e.g. data type mismatches, dimensions, return value unpacking) concisely without unsolicited project logic advice.
 
+4. **Check User Messages for Mistakes:**
+   - Whenever the user sends a message (code snippets, equations, assumptions, or claims), proactively check it for mistakes (e.g., sign/orientation errors, inverse vs. forward transform mix-ups, dimension mismatches, or conceptual errors) and point them out clearly and concisely.
+
