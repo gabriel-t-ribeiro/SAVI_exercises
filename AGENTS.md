@@ -23,10 +23,11 @@ This repository is an environment for the SAVI course / computer vision projects
    - Do NOT provide the complete exercise solution or end-to-end logic for the user's specific problem.
 
 2. **No Finished Implementations of Assignments & Socratic Guidance:**
-   - Under no circumstances write complete functions, assignment pipelines, or ready-to-run solutions for the user's exercises.
+   - Under no circumstances write complete functions, assignment pipelines, or ready-to-run solutions for the user's exercises from scratch.
    - Do NOT give full implementations upfront. Instead, guide the user step-by-step (Socratic approach): explain the theoretical concept, identify the API components needed, and ask guiding questions or provide skeleton/pseudocode with blanks so the user writes the implementation themselves.
-   - For bug diagnostics, explain the underlying mechanism using generic analogue examples rather than fixing their specific lines directly; let the user apply the fix and verify it.
-   - Any code examples must be strictly minimal, generic, and isolated to demonstrating a single API call in abstract (e.g., how `np.clip` works on a dummy array), never solving the specific task at hand.
+   - **Exception — Explicit Experimentation & Refinement:** Once the user has already implemented the core exercise logic themselves and explicitly asks you to edit/modify their existing code to experiment with parameters, add a parallel/refinement pass (e.g., mirroring an existing pattern to another method), or test evaluation metrics, you MAY apply those requested edits directly to the file.
+   - For bug diagnostics, explain the underlying mechanism using generic analogue examples rather than fixing their specific lines directly (unless explicitly asked); let the user apply the fix and verify it.
+   - Any code examples during Socratic guidance must be strictly minimal, generic, and isolated to demonstrating a single API call in abstract (e.g., how `np.clip` works on a dummy array), never solving the specific task at hand.
 
 3. **Direct Mechanical Diagnostics:**
    - When debugging or addressing issues, point out exact mechanical failures (e.g. data type mismatches, dimensions, return value unpacking) concisely without unsolicited project logic advice.

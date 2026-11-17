@@ -15,6 +15,32 @@ def draw_registration_result(source, target, transformation, name='open3d'):
     o3d.visualization.draw_geometries([source_temp, target_temp], window_name=str(name))
 
 
+def draw_all_registration_results(source, target, results):
+    visualizers = []
+    for idx, (label, res) in enumerate(results):
+        src_temp = copy.deepcopy(source)
+        tgt_temp = copy.deepcopy(target)
+        src_temp.paint_uniform_color([1, 0.706, 0])
+        tgt_temp.paint_uniform_color([0, 0.651, 0.929])
+        src_temp.transform(res.transformation)
+
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(window_name=label, width=420, height=420, left=50 + idx * 430, top=100)
+        vis.add_geometry(src_temp)
+        vis.add_geometry(tgt_temp)
+        visualizers.append(vis)
+
+    while visualizers:
+        still_open = []
+        for vis in visualizers:
+            if vis.poll_events():
+                vis.update_renderer()
+                still_open.append(vis)
+            else:
+                vis.destroy_window()
+        visualizers = still_open
+
+
 def compute_registration_error(T_est: np.ndarray, T_true: np.ndarray) -> tuple[float, float]:
     E = np.linalg.inv(T_true) @ T_est
     trans_err_mm = float(np.linalg.norm(E[:3, 3]) * 1000.0)
@@ -78,6 +104,7 @@ def main():
         pcd.orient_normals_consistent_tangent_plane(30)
 
     # --- Step 1: Global Registration (FPFH + RANSAC) ---
+    o3d.utility.random.seed(42)
     voxel_size = 0.05
     source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
     target_down, target_fpfh = preprocess_point_cloud(target, voxel_size)
@@ -86,35 +113,46 @@ def main():
         source_down, target_down, source_fpfh, target_fpfh, voxel_size
     )
     print("RANSAC Global Registration:", result_ransac)
-    draw_registration_result(source, target, result_ransac.transformation, name="RANSAC Global")
 
     # --- Step 2: Local ICP Refinement (using RANSAC output as trans_init) ---
     trans_init = result_ransac.transformation
     threshold = voxel_size * 2
 
-    reg_p2p = o3d.pipelines.registration.registration_icp(
+    reg_p2p_coarse = o3d.pipelines.registration.registration_icp(
         source, target, threshold, trans_init,
         o3d.pipelines.registration.TransformationEstimationPointToPoint(),
         o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000),
     )
-    draw_registration_result(source, target, reg_p2p.transformation, name="Point-to-Point ICP")
+    reg_p2p = o3d.pipelines.registration.registration_icp(
+        source, target, 0.02, reg_p2p_coarse.transformation,
+        o3d.pipelines.registration.TransformationEstimationPointToPoint(),
+        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000),
+    )
 
-    reg_p2l = o3d.pipelines.registration.registration_icp(
+    reg_p2l_coarse = o3d.pipelines.registration.registration_icp(
         source, target, threshold, trans_init,
         o3d.pipelines.registration.TransformationEstimationPointToPlane(),
         o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000),
     )
-    draw_registration_result(source, target, reg_p2l.transformation, name="Point-to-Plane ICP")
+    reg_p2l = o3d.pipelines.registration.registration_icp(
+        source, target, 0.02, reg_p2l_coarse.transformation,
+        o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000),
+    )
 
-    reg_sym = o3d.pipelines.registration.registration_symmetric_icp(
+    reg_sym_coarse = o3d.pipelines.registration.registration_symmetric_icp(
         source, target, threshold, trans_init,
         o3d.pipelines.registration.TransformationEstimationSymmetric(),
         o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000),
     )
-    draw_registration_result(source, target, reg_sym.transformation, name="Symmetric ICP")
+    reg_sym = o3d.pipelines.registration.registration_symmetric_icp(
+        source, target, 0.02, reg_sym_coarse.transformation,
+        o3d.pipelines.registration.TransformationEstimationSymmetric(),
+        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000),
+    )
 
     # --- Step 3: Compare RANSAC vs. ICP Refinement against T_true.json ---
-    print("\n=== Error Comparison vs T_true.json ===")
+    print("\n=== Error Comparison vs T_true.json (evaluated at 0.02 m) ===")
     results = [
         ("RANSAC Global", result_ransac),
         ("Point-to-Point ICP", reg_p2p),
@@ -122,11 +160,16 @@ def main():
         ("Symmetric ICP", reg_sym),
     ]
     for label, res in results:
+        eval_res = o3d.pipelines.registration.evaluate_registration(
+            source, target, 0.02, res.transformation
+        )
         t_err, r_err = compute_registration_error(res.transformation, T_true)
         print(
-            f"{label:<20} | fitness: {res.fitness:.6f} | inlier_rmse: {res.inlier_rmse:.6f} | "
+            f"{label:<20} | fitness: {eval_res.fitness:.6f} | inlier_rmse: {eval_res.inlier_rmse:.6f} | "
             f"{t_err:.2f} mm | {r_err:.2f} deg"
         )
+
+    draw_all_registration_results(source, target, results)
 
 
 if __name__ == "__main__":
